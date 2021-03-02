@@ -33,35 +33,35 @@ uint8_t get_i2cdata(uint8_t index) {
         return i2cdata[index];
     } else {
         // nope
-        return 0xFF;
+        return 0xFE;
     }
-    
+
 }
 
 void receive_callback(int bytes) {
-    // at this point, we already know that we are addressed
-    if(address_set) {
+    if(bytes == 1) {
+        // one byte, must be an address
+        buffer_adr = Wire.read();
+        // set to true, strictly speaking this flag is probably not necessary, but I feel better with it
+        address_set = true;
+    } else {
+        // more than one byte, must be a write transaction
+        // first byte is (start) address
+        buffer_adr = Wire.read();
         // as long as there is data, write current byte and increment index
         for(int i = 0; i < bytes; i++) {
             // TODO: multiple reads are untested
             try_set_i2cdata(buffer_adr++, Wire.read());
         }
         address_set = false;
-    } else {
-        buffer_adr = Wire.read();
-        address_set = true;
     }
 }
 
 void request_callback() {
-    if(address_set) {
-        // no repeated reads with Wire afaik
-        Wire.write(get_i2cdata(buffer_adr));
-        address_set = false;
-    } else {
-        // no buffer address, something went wrong
-        Wire.write(0xFF);
-    }
+    // either write was called before, or we'll just take the last address
+    // anyway, here comes the data
+    Wire.write(get_i2cdata(buffer_adr++));
+    address_set = false;
 }
 
 void init_i2c_slave(uint8_t adr)
@@ -71,8 +71,8 @@ void init_i2c_slave(uint8_t adr)
     Wire.onRequest(&request_callback);
 
     // I don't care about memset and performance here, we're in setup() after all
-    for(uint8_t i=0;i<I2CDATA_SIZE;i++)
-	{
-		force_set_i2cdata(i, 0);
-	}
+    for(uint8_t i=0; i<I2CDATA_SIZE; i++)
+    {
+        force_set_i2cdata(i, 0);
+    }
 }

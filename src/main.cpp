@@ -115,7 +115,6 @@ void setup() {
     // TODO: servos, in general
     servo1.attach(SERVO_1_PIN);
 
-
     // just to be safe, make sure we don't output 5V to the RasPi
     digitalWrite(SDA, 0);
     digitalWrite(SCL, 0);
@@ -123,7 +122,6 @@ void setup() {
     // setup i2c slave
     init_i2c_slave(I2C_ADDRESS);
     force_set_i2cdata(I2C_CHIP_ID, I2C_ADDRESS);
-
 
     // setup battery adc
     // free running, no ints, max. prescaler
@@ -145,7 +143,7 @@ void setup() {
     long_delay(1);
     M1_forward(0);
     long_delay(20);
-    M1_forward(50);
+    M1_reverse(50);
     long_delay(1);
     M1_forward(0);
 }
@@ -154,9 +152,11 @@ void setup() {
 
 void loop() {
     // refresh adc value from time to time
+    // TODO: does this hang? is it safe to call this every few us?
     force_set_i2cdata(I2C_CMD_BATTERY, get_battery_voltage());
-    PORTD ^= _BV(ULED);
-    long_delay(50);
+    
+    // refresh motor values
+    M1_forward(get_i2cdata(I2C_CMD_ESC));
 
 
 }
