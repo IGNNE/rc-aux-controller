@@ -1,8 +1,8 @@
 #include <Arduino.h>
 #include <Servo.h>
-#include <Wire.h>
 #define F_CPU 20000000
 #include <util/delay.h>
+#include <i2cslave.h>
 
 /**
  * @file ESC and servo controller based on pololu BabyOrangutan 328
@@ -11,8 +11,6 @@
  *
  * TODO:
  * - servos
- * - i2c slave
- * - analog battery voltage
  * - RasPi power control
  * - some sort of ui?
  * - check if the inerrupts / cycles are not too much
@@ -26,43 +24,25 @@
 #define ULED PD1
 
 #define NUM_OF_SERVOS 1
-// servo pins need arduino numbers
+// servo pins need arduino numbers - finish this 
 #define SERVO_1_PIN PD7
 #define SERVO_2_PIN 4 //PD4
 #define SERVO_3_PIN PD2
 Servo servo1;
 
 #define I2C_ADDRESS 0x04
-#define I2C_NUM_REGISTERS 6
-// permissions
-#define I2C_R 1
-#define I2C_W 2
-#define I2C_RW (I2C_R & I2C_W)
+
 // return values
 #define I2C_OK 1
 #define I2C_NOK 0
-// commands
-#define I2C_CHIP_ID 0
-#define I2C_CMD_BATTERY 1
-#define I2C_CMD_SERVO1 2
-#define I2C_CMD_SERVO2 3
-#define I2C_CMD_SERVO3 4
-#define I2C_CMD_ESC 5
+// commands/register addresses
+#define I2C_CHIP_ID 0     //< chip id (i2c address), gets will be ignored
+#define I2C_CMD_BATTERY 1 //< battery voltage: 255=5V, 0=0V, gets will be ignored
+#define I2C_CMD_SERVO1 2  //< set/get servo
+#define I2C_CMD_SERVO2 4  //< set/get servo
+#define I2C_CMD_SERVO3 6  //< set/get servo
+#define I2C_CMD_ESC 8     //< set/get motor controller
 
-/// "registers" for the i2c client
-volatile uint16_t i2c_register[I2C_NUM_REGISTERS];
-/// permissions for the registers
-const uint8_t i2c_register_permissions[I2C_NUM_REGISTERS] = { I2C_R, I2C_R, I2C_RW, I2C_RW, I2C_RW, I2C_RW };
-
-#define I2C_NO_REQUEST 0 // TODO FIXME: 
-
-/**
- * I2C should communicate as follows:
- * 1. Master sends one byte command
- * 2.a Master requests data ad index ::request_byte
- * 2.b Master writes data to index ::request_byte
- */
-volatile uint8_t request_byte = I2C_NO_REQUEST;
 
 /**
  * Sleep in increments of 10 ms, because _delay_ms can sleep at max 13 ms
@@ -73,6 +53,9 @@ void long_delay(uint8_t ten_ms) {
     }
 }
 
+/**
+ * Battery voltage in <value>/256*5 V
+ */
 uint8_t get_battery_voltage() {
     return uint8_t(ADCH);
 }
@@ -101,76 +84,9 @@ void M2_reverse(unsigned char pwm)
     OCR2A = pwm;
 }
 
-void i2c_on_request() {
-    switch (request_byte)
-    {
-    case I2C_CMD_BATTERY:
-        Wire.write(get_battery_voltage());
-        break;
-
-    case I2C_NO_REQUEST:
-        // something went wrong, answer nok
-        Wire.write(I2C_NOK);
-        break;
-    default:
-        // command already done, just answer ok
-        Wire.write(I2C_OK);
-        break;
-    }
-    // toggle led to show that something is working
-    PORTD ^= _BV(ULED);
-}
-
-void i2c_on_receive(int num_of_bytes) {
-
-    // new transaction starts here
-    request_byte = Wire.read();
-    if(request_byte < I2C_NUM_REGISTERS) {
-        // TODO: Finish this
-        // TODO: check 3-byte servo commands
-        if(num_of_bytes == 3) {
-
-            // 3 byte set command, for servo timings
-            request_byte = Wire.read();
-            uint16_t payload = Wire.read() + (Wire.read() << 16);
-            switch (request_byte) {
-            case I2C_CMD_SERVO1:
-                servo1.writeMicroseconds(payload);
-                break;
-            case I2C_CMD_ESC:
-                M1_forward(payload/4096);
-                break;
-            default:
-                // command not understood
-                request_byte = I2C_NO_REQUEST;
-                break;
-            }
-
-        } else if(num_of_bytes == 1) {
-
-            // 1 byte get command, pass on to request callback
-            request_byte = Wire.read();
-
-        } else {
-            // something went wrong
-            // empty buffer
-            while(Wire.available()) {
-                Wire.read();
-            }
-            request_byte = I2C_NO_REQUEST;
-        }
-    }
-
-
-
-
-    // toggle led to show that something is working
-    PORTD ^= _BV(ULED);
-}
-
 
 // Motor Initialization routine -- this function must be called
-//  before you use any of the above functions
+// before you use any of the functions above
 void motors_init()
 {
     // configure for inverted PWM output on motor control pins:
@@ -196,15 +112,18 @@ void setup() {
     motors_init();
 
     // setup servos
+    // TODO: servos, in general
     servo1.attach(SERVO_1_PIN);
 
-    // setup i2c slave
-    Wire.begin(I2C_ADDRESS);
-    // just to be safe
+
+    // just to be safe, make sure we don't output 5V to the RasPi
     digitalWrite(SDA, 0);
     digitalWrite(SCL, 0);
-    Wire.onRequest(i2c_on_request);
-    Wire.onReceive(i2c_on_receive);
+
+    // setup i2c slave
+    init_i2c_slave(I2C_ADDRESS);
+    force_set_i2cdata(I2C_CHIP_ID, I2C_ADDRESS);
+
 
     // setup battery adc
     // free running, no ints, max. prescaler
@@ -214,26 +133,30 @@ void setup() {
     // start ad
     ADCSRA |= _BV(ADSC);
 
-
-
     // setup led and blink to tell that we are ready
     DDRD |= _BV(ULED);
     for(uint8_t i = 0; i < 5; i++) {
         PORTD ^= _BV(ULED);
-        long_delay(50);
+        long_delay(100);
     }
 
     // test-run motor
-    M1_forward(65);
-    _delay_ms(10);
+    M1_forward(50);
+    long_delay(1);
     M1_forward(0);
-    _delay_ms(200);
-    M1_forward(65);
-    _delay_ms(10);
+    long_delay(20);
+    M1_forward(50);
+    long_delay(1);
     M1_forward(0);
 }
 
+
+
 void loop() {
+    // refresh adc value from time to time
+    force_set_i2cdata(I2C_CMD_BATTERY, get_battery_voltage());
+    PORTD ^= _BV(ULED);
+    long_delay(50);
 
 
 }
