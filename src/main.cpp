@@ -72,17 +72,20 @@ void M1_reverse(unsigned char pwm)
     OCR0A = pwm;
 }
 
-void M2_forward(unsigned char pwm)
-{
-    OCR2A = 0;
-    OCR2B = pwm;
-}
 
-void M2_reverse(unsigned char pwm)
-{
-    OCR2B = 0;
-    OCR2A = pwm;
-}
+// don't use any more, both motor channels are shorted together in hardware
+// and driven by M1 only
+// void M2_forward(unsigned char pwm)
+// {
+//     OCR2A = 0;
+//     OCR2B = pwm;
+// }
+
+// void M2_reverse(unsigned char pwm)
+// {
+//     OCR2B = 0;
+//     OCR2A = pwm;
+// }
 
 
 // Motor Initialization routine -- this function must be called
@@ -102,8 +105,8 @@ void motors_init()
 
     // set PWM pins as digital outputs (the PWM signals will not
     // appear on the lines if they are digital inputs)
-    DDRD |= (1 << PORTD3) | (1 << PORTD5) | (1 << PORTD6);
-    DDRB |= (1 << PORTB3);
+    // keep in mind that only M1 is used, M2 (B3/D3) has to stay input / high-Z
+    DDRD = (1 << PORTD5) | (1 << PORTD6);
 }
 
 void setup() {
@@ -143,7 +146,7 @@ void setup() {
     long_delay(1);
     M1_forward(0);
     long_delay(20);
-    M1_reverse(50);
+    M1_forward(50);
     long_delay(1);
     M1_forward(0);
 }
@@ -151,8 +154,7 @@ void setup() {
 
 
 void loop() {
-    // refresh adc value from time to time
-    // TODO: does this hang? is it safe to call this every few us?
+    // refresh adc value from time to time TODO: don't do this every loop?
     force_set_i2cdata(I2C_CMD_BATTERY, get_battery_voltage());
     
     // refresh motor values
