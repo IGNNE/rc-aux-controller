@@ -43,6 +43,8 @@ Servo servo1;
 #define I2C_CMD_SERVO3 6  //< set/get servo
 #define I2C_CMD_ESC 8     //< set/get motor controller
 
+// About 3.4V
+#define BATTERY_MIN_VALUE 175 
 
 /**
  * Sleep in increments of 10 ms, because _delay_ms can sleep at max 13 ms
@@ -151,14 +153,54 @@ void setup() {
     M1_forward(0);
 }
 
-
-
 void loop() {
-    // refresh adc value from time to time TODO: don't do this every loop?
-    force_set_i2cdata(I2C_CMD_BATTERY, get_battery_voltage());
+    // TODO: test modifications
+
+    // "tick counter" for doing tasks every few hundred ms, roughly estimated
+    // TODO: check run time of this
+    static uint16_t loops_since_last_tick = 0;
+    const uint16_t MAX_SINCE_LAST_TICK = F_CPU * 100;
+
+    // only trip the battery warning after two low readings in a row
+    static bool battery_warning_armed = false;
+    static bool battery_warning_tripped = false;
+
+    if(loops_since_last_tick > MAX_SINCE_LAST_TICK) {
+        loops_since_last_tick = 0;
+
+        // vvv tick counter has run out, run tasks here vvv
+
+        // refresh adc value from time to time
+        uint8_t battery_voltage = get_battery_voltage();
+        force_set_i2cdata(I2C_CMD_BATTERY, battery_voltage);
+
+
+        // battery warning logic
+        if(battery_voltage < BATTERY_MIN_VALUE) {
+            if(!battery_warning_armed) {
+                // first low battery reading, arm warning
+                battery_warning_armed = true;
+            } else {
+                // battery warning armed, now run batery alert
+                battery_warning_tripped = true;
+            }
+        } else {
+            // battery is above threshold, dis-arm warning
+            battery_warning_armed = false;
+        }
+        // if battery warning is tripped, blink led
+        if(battery_warning_tripped) {
+            PORTD ^= _BV(ULED);
+            // TODO: do something else here, maybe add a buzzer?
+        }
+    }
+
+    // increase tick counter
+    loops_since_last_tick++;
     
-    // refresh motor values
+    // refresh motor values on every loop for maximum responsiveness
     M1_forward(get_i2cdata(I2C_CMD_ESC));
+
 
 
 }
