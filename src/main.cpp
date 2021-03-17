@@ -43,8 +43,8 @@ Servo servo1;
 #define I2C_CMD_SERVO3 6  //< set/get servo
 #define I2C_CMD_ESC 8     //< set/get motor controller
 
-// About 3.4V
-#define BATTERY_MIN_VALUE 175 
+// About 3.2V
+#define BATTERY_MIN_VALUE 165 
 
 /**
  * Sleep in increments of 10 ms, because _delay_ms can sleep at max 13 ms
@@ -144,17 +144,16 @@ void setup() {
     }
 
     // test-run motor
-    M1_forward(50);
+    M1_forward(10);
     long_delay(1);
     M1_forward(0);
-    long_delay(20);
-    M1_forward(50);
+    long_delay(50);
+    M1_forward(10);
     long_delay(1);
     M1_forward(0);
 }
 
 void loop() {
-    // TODO: test modifications
 
     // "tick counter" for doing tasks every few hundred ms, roughly estimated
     // TODO: check run time of this
@@ -191,6 +190,8 @@ void loop() {
         // if battery warning is tripped, blink led
         if(battery_warning_tripped) {
             PORTD ^= _BV(ULED);
+            // stop motors to prevent brownout
+            M1_forward(0);
             // TODO: do something else here, maybe add a buzzer?
         }
     }
@@ -200,7 +201,5 @@ void loop() {
     
     // refresh motor values on every loop for maximum responsiveness
     M1_forward(get_i2cdata(I2C_CMD_ESC));
-
-
 
 }
