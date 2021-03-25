@@ -49,8 +49,7 @@ void receive_callback(int bytes) {
         // first byte is (start) address
         buffer_adr = Wire.read();
         // as long as there is data, write current byte and increment index
-        for(int i = 0; i < bytes; i++) {
-            // TODO: multiple reads are untested
+        while(Wire.available()) {
             try_set_i2cdata(buffer_adr++, Wire.read());
         }
         address_set = false;

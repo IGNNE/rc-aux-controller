@@ -25,9 +25,10 @@
 
 #define NUM_OF_SERVOS 1
 // servo pins need arduino numbers - finish this 
-#define SERVO_1_PIN PD7
-#define SERVO_2_PIN 4 //PD4
-#define SERVO_3_PIN PD2
+#define SERVO_1_PIN 7 // PD7
+#define SERVO_2_PIN 4 // PD4
+#define SERVO_3_PIN 2 // PD2
+#define SERVO_4_PIN 1 // PD1
 Servo servo1;
 
 #define I2C_ADDRESS 0x04
