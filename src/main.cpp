@@ -158,7 +158,7 @@ void loop() {
     // "tick counter" for doing tasks every few hundred ms, roughly estimated
     // TODO: check run time of this
     static uint16_t loops_since_last_tick = 0;
-    const uint16_t MAX_SINCE_LAST_TICK = F_CPU * 100;
+    const uint16_t MAX_SINCE_LAST_TICK = F_CPU * 200;
 
     // only trip the battery warning after two low readings in a row
     static bool battery_warning_armed = false;
@@ -200,6 +200,8 @@ void loop() {
     loops_since_last_tick++;
     
     // refresh motor values on every loop for maximum responsiveness
-    M1_forward(get_i2cdata(I2C_CMD_ESC));
+    if(!battery_warning_tripped) {
+        M1_forward(get_i2cdata(I2C_CMD_ESC));
+    }
 
 }
