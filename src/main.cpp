@@ -23,13 +23,14 @@
 
 #define ULED PD1
 
-#define NUM_OF_SERVOS 1
-// servo pins need arduino numbers - finish this 
+// servo pins need arduino numbers - finish this
 #define SERVO_1_PIN 7 // PD7
 #define SERVO_2_PIN 4 // PD4
 #define SERVO_3_PIN 2 // PD2
 #define SERVO_4_PIN 1 // PD1
 Servo servo1;
+Servo servo2;
+Servo servo3;
 
 #define I2C_ADDRESS 0x04
 
@@ -45,7 +46,7 @@ Servo servo1;
 #define I2C_CMD_ESC 8     //< set/get motor controller
 
 // About 3.2V
-#define BATTERY_MIN_VALUE 165 
+#define BATTERY_MIN_VALUE 165
 
 /**
  * Sleep in increments of 10 ms, because _delay_ms can sleep at max 13 ms
@@ -117,10 +118,6 @@ void setup() {
     // setup motors
     motors_init();
 
-    // setup servos
-    // TODO: servos, in general
-    servo1.attach(SERVO_1_PIN);
-
     // just to be safe, make sure we don't output 5V to the RasPi
     digitalWrite(SDA, 0);
     digitalWrite(SCL, 0);
@@ -128,6 +125,19 @@ void setup() {
     // setup i2c slave
     init_i2c_slave(I2C_ADDRESS);
     force_set_i2cdata(I2C_CHIP_ID, I2C_ADDRESS);
+
+    // setup servos
+    servo1.attach(SERVO_1_PIN);
+    servo2.attach(SERVO_2_PIN);
+    servo3.attach(SERVO_3_PIN);
+
+    // set all servo values to the middle position of 1500 (=0x05DC)
+    try_set_i2cdata(I2C_CMD_SERVO1, 0x05);
+    try_set_i2cdata(I2C_CMD_SERVO1+1, 0xDC);
+    try_set_i2cdata(I2C_CMD_SERVO2, 0x05);
+    try_set_i2cdata(I2C_CMD_SERVO2+1, 0xDC);
+    try_set_i2cdata(I2C_CMD_SERVO3, 0x05);
+    try_set_i2cdata(I2C_CMD_SERVO3+1, 0xDC);
 
     // setup battery adc
     // free running, no ints, max. prescaler
@@ -199,10 +209,13 @@ void loop() {
 
     // increase tick counter
     loops_since_last_tick++;
-    
-    // refresh motor values on every loop for maximum responsiveness
+
+    // refresh motor/servo values on every loop for maximum responsiveness
     if(!battery_warning_tripped) {
         M1_forward(get_i2cdata(I2C_CMD_ESC));
+        servo1.writeMicroseconds((get_i2cdata(I2C_CMD_SERVO1)<<8) + get_i2cdata(I2C_CMD_SERVO1+1));
+        servo2.writeMicroseconds((get_i2cdata(I2C_CMD_SERVO2)<<8) + get_i2cdata(I2C_CMD_SERVO2+1));
+        servo3.writeMicroseconds((get_i2cdata(I2C_CMD_SERVO3)<<8) + get_i2cdata(I2C_CMD_SERVO3+1));
     }
 
 }
