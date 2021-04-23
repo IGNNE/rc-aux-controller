@@ -10,16 +10,9 @@
  * Hardware setup: TODO
  *
  * TODO:
- * - servos
  * - RasPi power control
- * - some sort of ui?
- * - check if the inerrupts / cycles are not too much
+ * - fix servo stutter by blocking reads while setting servos
  */
-
-#define MOTOR_1_A PD5
-#define MOTOR_1_B PD6
-#define MOTOR_2_A PD3
-#define MOTOR_2_B PB3
 
 #define ULED PD1
 
@@ -31,6 +24,15 @@
 Servo servo1;
 Servo servo2;
 Servo servo3;
+Servo servo4;
+
+
+#ifdef MOTOR_PWM
+#define MOTOR_1_A PD5
+#define MOTOR_1_B PD6
+#define MOTOR_2_A PD3
+#define MOTOR_2_B PB3
+#endif // MOTOR_PWM
 
 #define I2C_ADDRESS 0x04
 
@@ -38,12 +40,13 @@ Servo servo3;
 #define I2C_OK 1
 #define I2C_NOK 0
 // commands/register addresses
-#define I2C_CHIP_ID 0     //< chip id (i2c address), gets will be ignored
-#define I2C_CMD_BATTERY 1 //< battery voltage: 255=5V, 0=0V, gets will be ignored
+#define I2C_CHIP_ID 0     //< chip id (i2c address), sets will be ignored
+#define I2C_CMD_BATTERY 1 //< battery voltage: 255=5V, 0=0V, sets will be ignored
 #define I2C_CMD_SERVO1 2  //< set/get servo
 #define I2C_CMD_SERVO2 4  //< set/get servo
 #define I2C_CMD_SERVO3 6  //< set/get servo
 #define I2C_CMD_ESC 8     //< set/get motor controller
+
 
 // About 3.2V
 #define BATTERY_MIN_VALUE 165
@@ -64,6 +67,9 @@ uint8_t get_battery_voltage() {
     return uint8_t(ADCH);
 }
 
+
+#ifdef MOTOR_PWM
+
 void M1_forward(unsigned char pwm)
 {
     OCR0A = 0;
@@ -75,7 +81,6 @@ void M1_reverse(unsigned char pwm)
     OCR0B = 0;
     OCR0A = pwm;
 }
-
 
 // don't use any more, both motor channels are shorted together in hardware
 // and driven by M1 only
@@ -91,7 +96,6 @@ void M1_reverse(unsigned char pwm)
 //     OCR2A = pwm;
 // }
 
-
 // Motor Initialization routine -- this function must be called
 // before you use any of the functions above
 void motors_init()
@@ -101,8 +105,8 @@ void motors_init()
     //  Timer0 and Timer2 count up from 0 to 255
     TCCR0A = TCCR2A = 0xF3;
 
-    // use the system clock/8 (=2.5 MHz) as the timer clock
-    TCCR0B = TCCR2B = 0x02;
+    // use the system clock/64 (=312,5 kHz) as the timer clock
+    TCCR0B = TCCR2B = 0x03;
 
     // initialize all PWMs to 0% duty cycle (braking)
     OCR0A = OCR0B = OCR2A = OCR2B = 0;
@@ -113,10 +117,15 @@ void motors_init()
     DDRD = (1 << PORTD5) | (1 << PORTD6);
 }
 
+#endif // MOTOR_PWM
+
+
 void setup() {
 
+#ifdef MOTOR_PWM
     // setup motors
     motors_init();
+#endif // MOTOR_PWM
 
     // just to be safe, make sure we don't output 5V to the RasPi
     digitalWrite(SDA, 0);
@@ -144,7 +153,7 @@ void setup() {
     ADCSRA = 0b10100111;
     // channel 1, external reference, 8 bit only
     ADMUX = 0b00100001;
-    // start ad
+    // start adc
     ADCSRA |= _BV(ADSC);
 
     // setup led and blink to tell that we are ready
@@ -154,6 +163,7 @@ void setup() {
         long_delay(100);
     }
 
+#ifdef MOTOR_PWM
     // test-run motor
     M1_forward(10);
     long_delay(1);
@@ -162,6 +172,8 @@ void setup() {
     M1_forward(10);
     long_delay(1);
     M1_forward(0);
+#endif // MOTOR_PWM
+
 }
 
 void loop() {
@@ -169,7 +181,7 @@ void loop() {
     // "tick counter" for doing tasks every few hundred ms, roughly estimated
     // TODO: check run time of this
     static uint16_t loops_since_last_tick = 0;
-    const uint16_t MAX_SINCE_LAST_TICK = F_CPU * 200;
+    const uint32_t MAX_SINCE_LAST_TICK = F_CPU / 100;
 
     // only trip the battery warning after two low readings in a row
     static bool battery_warning_armed = false;
@@ -201,8 +213,11 @@ void loop() {
         // if battery warning is tripped, blink led
         if(battery_warning_tripped) {
             PORTD ^= _BV(ULED);
+#ifdef MOTOR_PWM
             // stop motors to prevent brownout
             M1_forward(0);
+#endif // MOTOR_PWM
+
             // TODO: do something else here, maybe add a buzzer?
         }
     }
@@ -211,8 +226,15 @@ void loop() {
     loops_since_last_tick++;
 
     // refresh motor/servo values on every loop for maximum responsiveness
+    // TODO: lock i2c during these calls
     if(!battery_warning_tripped) {
+
+#ifdef MOTOR_PWM
         M1_forward(get_i2cdata(I2C_CMD_ESC));
+#else
+        servo4.writeMicroseconds((get_i2cdata(I2C_CMD_ESC)<<8) + get_i2cdata(I2C_CMD_ESC+1));
+#endif // MOTOR_PWM
+
         servo1.writeMicroseconds((get_i2cdata(I2C_CMD_SERVO1)<<8) + get_i2cdata(I2C_CMD_SERVO1+1));
         servo2.writeMicroseconds((get_i2cdata(I2C_CMD_SERVO2)<<8) + get_i2cdata(I2C_CMD_SERVO2+1));
         servo3.writeMicroseconds((get_i2cdata(I2C_CMD_SERVO3)<<8) + get_i2cdata(I2C_CMD_SERVO3+1));
