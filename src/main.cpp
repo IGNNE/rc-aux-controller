@@ -14,6 +14,11 @@
  * - fix servo stutter by blocking reads while setting servos
  */
 
+// If defined, use internal PWM for motor control
+// #define MOTOR_PWM
+
+
+
 #define ULED PD1
 
 // servo pins need arduino numbers - finish this
@@ -139,6 +144,7 @@ void setup() {
     servo1.attach(SERVO_1_PIN);
     servo2.attach(SERVO_2_PIN);
     servo3.attach(SERVO_3_PIN);
+    servo4.attach(SERVO_4_PIN);
 
     // set all servo values to the middle position of 1500 (=0x05DC)
     try_set_i2cdata(I2C_CMD_SERVO1, 0x05);
@@ -147,6 +153,13 @@ void setup() {
     try_set_i2cdata(I2C_CMD_SERVO2+1, 0xDC);
     try_set_i2cdata(I2C_CMD_SERVO3, 0x05);
     try_set_i2cdata(I2C_CMD_SERVO3+1, 0xDC);
+#ifndef MOTOR_PWM
+    // if the motor is driven by an external speed controller, initialize like a servo
+    // but set starting throttle to 1000 / 0%
+    try_set_i2cdata(I2C_CMD_ESC, 0x03);
+    try_set_i2cdata(I2C_CMD_ESC, 0xE8);
+#endif // MOTOR_PWM
+
 
     // setup battery adc
     // free running, no ints, max. prescaler
