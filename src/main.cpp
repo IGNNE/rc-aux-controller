@@ -25,7 +25,7 @@
 #define SERVO_1_PIN 7 // PD7
 #define SERVO_2_PIN 4 // PD4
 #define SERVO_3_PIN 2 // PD2
-#define SERVO_4_PIN 1 // PD1
+#define SERVO_4_PIN 0 // PD0
 Servo servo1;
 Servo servo2;
 Servo servo3;
@@ -154,10 +154,12 @@ void setup() {
     try_set_i2cdata(I2C_CMD_SERVO3, 0x05);
     try_set_i2cdata(I2C_CMD_SERVO3+1, 0xDC);
 #ifndef MOTOR_PWM
+    // initialize the motor as fast as possible to arm the esc
+    servo4.writeMicroseconds(1000);
     // if the motor is driven by an external speed controller, initialize like a servo
     // but set starting throttle to 1000 / 0%
     try_set_i2cdata(I2C_CMD_ESC, 0x03);
-    try_set_i2cdata(I2C_CMD_ESC, 0xE8);
+    try_set_i2cdata(I2C_CMD_ESC+1, 0xE8);
 #endif // MOTOR_PWM
 
 
@@ -192,9 +194,10 @@ void setup() {
 void loop() {
 
     // "tick counter" for doing tasks every few hundred ms, roughly estimated
-    // TODO: check run time of this
+    // the servo functions are the largest part in this loop, so without them this runs roughly 10x faster
+    // TODO: runs a bit slow now with all the servo stuff, maybe use a timer instead?
     static uint16_t loops_since_last_tick = 0;
-    const uint32_t MAX_SINCE_LAST_TICK = F_CPU / 100;
+    const uint32_t MAX_SINCE_LAST_TICK = F_CPU / 500;
 
     // only trip the battery warning after two low readings in a row
     static bool battery_warning_armed = false;
@@ -216,7 +219,7 @@ void loop() {
                 // first low battery reading, arm warning
                 battery_warning_armed = true;
             } else {
-                // battery warning armed, now run batery alert
+                // battery warning armed, now run battery alert
                 battery_warning_tripped = true;
             }
         } else {
@@ -230,7 +233,6 @@ void loop() {
             // stop motors to prevent brownout
             M1_forward(0);
 #endif // MOTOR_PWM
-
             // TODO: do something else here, maybe add a buzzer?
         }
     }
@@ -240,17 +242,16 @@ void loop() {
 
     // refresh motor/servo values on every loop for maximum responsiveness
     // TODO: lock i2c during these calls
-    if(!battery_warning_tripped) {
+    servo1.writeMicroseconds((get_i2cdata(I2C_CMD_SERVO1)<<8) + get_i2cdata(I2C_CMD_SERVO1+1));
+    servo2.writeMicroseconds((get_i2cdata(I2C_CMD_SERVO2)<<8) + get_i2cdata(I2C_CMD_SERVO2+1));
+    servo3.writeMicroseconds((get_i2cdata(I2C_CMD_SERVO3)<<8) + get_i2cdata(I2C_CMD_SERVO3+1));
 
+    // only uptdate motor if there is enough battery voltage left
+    if(!battery_warning_tripped) {
 #ifdef MOTOR_PWM
         M1_forward(get_i2cdata(I2C_CMD_ESC));
 #else
         servo4.writeMicroseconds((get_i2cdata(I2C_CMD_ESC)<<8) + get_i2cdata(I2C_CMD_ESC+1));
 #endif // MOTOR_PWM
-
-        servo1.writeMicroseconds((get_i2cdata(I2C_CMD_SERVO1)<<8) + get_i2cdata(I2C_CMD_SERVO1+1));
-        servo2.writeMicroseconds((get_i2cdata(I2C_CMD_SERVO2)<<8) + get_i2cdata(I2C_CMD_SERVO2+1));
-        servo3.writeMicroseconds((get_i2cdata(I2C_CMD_SERVO3)<<8) + get_i2cdata(I2C_CMD_SERVO3+1));
     }
-
 }

@@ -4,15 +4,19 @@
 namespace {
 
 /// size of the buffer
-#define I2CDATA_SIZE 10
-/// number of bytes that should be read only, starting from byte 0
-#define I2CDATA_RO_BYTES 2
+constexpr uint8_t I2CDATA_SIZE = 10;
 
+/// number of bytes that should be read only, starting from byte 0
+constexpr uint8_t I2CDATA_RO_BYTES = 2;
+
+/// array for the "registers"
 volatile uint8_t i2cdata[I2CDATA_SIZE];
 
-volatile uint8_t buffer_adr;
+/// save address between write and read
+volatile uint8_t buffer_adr = 0;
 
-volatile bool address_set = false; //< first write (false): register address, second write (true): data
+/// first write (false): register address, second write (true): data
+volatile bool address_set = false; 
 
 }
 
