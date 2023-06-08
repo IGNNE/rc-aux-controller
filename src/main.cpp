@@ -21,15 +21,18 @@
 
 #define ULED PD1
 
-// servo pins need arduino numbers - finish this
+// servo pins need arduino numbers
 #define SERVO_1_PIN 7 // PD7
 #define SERVO_2_PIN 4 // PD4
 #define SERVO_3_PIN 2 // PD2
-#define SERVO_4_PIN 0 // PD0
+#define SERVO_4_PIN 1 // PD1
+#define SERVO_5_PIN 0 // PD0, motor esc
 Servo servo1;
 Servo servo2;
 Servo servo3;
 Servo servo4;
+Servo servo5;
+
 
 
 #ifdef MOTOR_PWM
@@ -50,7 +53,8 @@ Servo servo4;
 #define I2C_CMD_SERVO1 2  //< set/get servo
 #define I2C_CMD_SERVO2 4  //< set/get servo
 #define I2C_CMD_SERVO3 6  //< set/get servo
-#define I2C_CMD_ESC 8     //< set/get motor controller
+#define I2C_CMD_SERVO4 8  //< set/get servo
+#define I2C_CMD_ESC 10     //< set/get motor controller
 
 
 // About 3.2V
@@ -145,6 +149,7 @@ void setup() {
     servo2.attach(SERVO_2_PIN);
     servo3.attach(SERVO_3_PIN);
     servo4.attach(SERVO_4_PIN);
+    servo5.attach(SERVO_5_PIN);
 
     // set all servo values to the middle position of 1500 (=0x05DC)
     try_set_i2cdata(I2C_CMD_SERVO1, 0x05);
@@ -153,9 +158,11 @@ void setup() {
     try_set_i2cdata(I2C_CMD_SERVO2+1, 0xDC);
     try_set_i2cdata(I2C_CMD_SERVO3, 0x05);
     try_set_i2cdata(I2C_CMD_SERVO3+1, 0xDC);
+    try_set_i2cdata(I2C_CMD_SERVO4, 0x05);
+    try_set_i2cdata(I2C_CMD_SERVO4+1, 0xDC);
 #ifndef MOTOR_PWM
     // initialize the motor as fast as possible to arm the esc
-    servo4.writeMicroseconds(1000);
+    servo5.writeMicroseconds(1000);
     // if the motor is driven by an external speed controller, initialize like a servo
     // but set starting throttle to 1000 / 0%
     try_set_i2cdata(I2C_CMD_ESC, 0x03);
@@ -245,13 +252,18 @@ void loop() {
     servo1.writeMicroseconds((get_i2cdata(I2C_CMD_SERVO1)<<8) + get_i2cdata(I2C_CMD_SERVO1+1));
     servo2.writeMicroseconds((get_i2cdata(I2C_CMD_SERVO2)<<8) + get_i2cdata(I2C_CMD_SERVO2+1));
     servo3.writeMicroseconds((get_i2cdata(I2C_CMD_SERVO3)<<8) + get_i2cdata(I2C_CMD_SERVO3+1));
+    servo4.writeMicroseconds((get_i2cdata(I2C_CMD_SERVO4)<<8) + get_i2cdata(I2C_CMD_SERVO4+1));
 
     // only uptdate motor if there is enough battery voltage left
     if(!battery_warning_tripped) {
 #ifdef MOTOR_PWM
         M1_forward(get_i2cdata(I2C_CMD_ESC));
+    } else {
+        M1_forward(0);
 #else
-        servo4.writeMicroseconds((get_i2cdata(I2C_CMD_ESC)<<8) + get_i2cdata(I2C_CMD_ESC+1));
+        servo5.writeMicroseconds((get_i2cdata(I2C_CMD_ESC)<<8) + get_i2cdata(I2C_CMD_ESC+1));
+    } else {
+        servo5.writeMicroseconds(1000);
 #endif // MOTOR_PWM
     }
 }
